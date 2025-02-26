@@ -46,8 +46,8 @@ def save_last_checked_episode(episode_number: int):
         upsert=True
     )
 
-def send_email(episode_info: dict):
-    """Send email notification about new episode"""
+def send_email(episodes: list):
+    """Send email notification about new episodes"""
     sender = os.getenv('EMAIL_SENDER')
     password = os.getenv('EMAIL_PASSWORD')
     recipient = os.getenv('EMAIL_RECIPIENT')
@@ -55,16 +55,21 @@ def send_email(episode_info: dict):
     print(f"Attempting to send email from: {sender} to: {recipient}")
     
     # Format the email content
-    air_date = datetime.fromisoformat(episode_info['since'].replace('Z', '+00:00'))
-    subject = f"New Episode Available: M jak miłość - Episode {episode_info['number']}"
-    body = f"""
-    New episode of M jak miłość is available!
+    subject = f"New Episodes Available: M jak miłość - {len(episodes)} new episode(s)"
     
-    Episode: {episode_info['number']}
-    Title: {episode_info['title']}
-    Air Date: {air_date.strftime('%Y-%m-%d %H:%M')}
-    Watch here: {episode_info['webUrl']}
-    """
+    # Create body with information about all new episodes
+    episodes_info = []
+    for episode in episodes:
+        air_date = datetime.fromisoformat(episode['since'].replace('Z', '+00:00'))
+        episode_info = f"""
+Episode {episode['number']}:
+Title: {episode['title']}
+Air Date: {air_date.strftime('%Y-%m-%d %H:%M')}
+Watch here: {episode['webUrl']}
+"""
+        episodes_info.append(episode_info)
+    
+    body = "New episodes of M jak miłość are available!\n\n" + "\n".join(episodes_info)
     
     msg = MIMEText(body)
     msg['Subject'] = subject
@@ -101,10 +106,16 @@ def check_new_episode():
         latest_episode = episodes[0]  # First episode is the latest after sorting
         last_checked = get_last_checked_episode()
         
-        if latest_episode['number'] > last_checked:
-            print(f"New episode found: {latest_episode['number']}")
-            send_email(latest_episode)
-            save_last_checked_episode(latest_episode['number'])
+        # Find all new episodes
+        new_episodes = [ep for ep in episodes if ep['number'] > last_checked]
+        
+        if new_episodes:
+            print(f"Found {len(new_episodes)} new episode(s)")
+            # Send one email with all new episodes
+            send_email(new_episodes)
+            # Update the last checked episode to the newest one
+            latest_episode_number = max(ep['number'] for ep in new_episodes)
+            save_last_checked_episode(latest_episode_number)
         else:
             print(f"No new episodes. Latest: {latest_episode['number']}, Last checked: {last_checked}")
             
